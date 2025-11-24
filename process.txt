@@ -1,0 +1,195 @@
+현재 상태: 레벨 1 (텍스트 변환) 백엔드 코드 완성. 최종 목표: 레벨 2 (이미지 변환) 풀스택 완성.
+
+🚀 프로젝트 레벨 2: '악보 이미지'로 응답하기 로드맵
+1단계: 1차 엔진(gemini-pro-vision) 완벽하게 조율하기 (백엔드)
+Nano Banana(2차 엔진)에게 완벽한 '지시서'를 주려면, 1차 엔진이 원본 악보를 완벽하게 '텍스트'로 요약해야 합니다. "쓰레기가 들어가면 쓰레기가 나옵니다." (GIGO)
+
+악몽의 테스트 케이스 준비: 다양한 조표(샵, 플랫), 박자(8분의 6박자 등), 리듬(점음표, 쉼표)이 포함된 악보 이미지를 최대한 많이 준비합니다.
+
+프롬프트 엔지니어링 (핵심):
+
+main.py의 prompt 변수를 훨씬 더 구체적으로 다듬어야 합니다.
+
+이유: 2단계에서 Nano Banana가 '이해할 수 있는' 포맷으로 텍스트가 나와야 합니다.
+
+예시: "멜로디를 C4 D4 E4 G4 같은 단순한 텍스트로 바꾸되, 새로운 이미지를 생성할 수 있도록 ABC 표기법"이나 MusicXML의 아주 간단한 형태로 변환해 줘."라고 지시해야 합니다. (단순히 C4 D4... 만으로는 박자, 리듬을 표현 못 해 새 악보를 그리기 어렵습니다.)
+
+결과물 확인: 이 프롬프트를 통과한 simplified_notes가 새로운 악보를 그리기에 충분한 '정보'를 담고 있는지 확인합니다.
+
+[필수] gemini-pro-vision이 C4 D4 E4 같은 단순 텍스트가 아니라, X:1\nT:Simple Melody\nM:4/4\nK:C\nC D E F | G A B c | 같은 '악보 기술(Notation) 텍스트' (예: ABC Notation)를 뱉어내도록 프롬프트를 수정해야 합니다.
+
+2단계: 2차 엔진(Nano Banana) 연동하기 (백엔드)
+이제 1단계에서 얻은 '악보 기술 텍스트'를 '진짜 이미지'로 만들 차례입니다.
+
+모델 인스턴스 추가: main.py에 Nano Banana (정식 API 모델명은 gemini-2.5-flash-image 등일 수 있습니다. 문서를 확인하세요) 모델을 호출하는 코드를 추가합니다.
+
+Python
+
+# main.py 상단에 추가
+image_model = genai.GenerativeModel('여기에-나노바나나-모델명') 
+Nano Banana용 프롬프트 작성: 1단계에서 얻은 abc_notation_text를 이미지로 변환하라는 새 프롬프트를 만듭니다.
+
+Python
+
+# /simplify 함수 내부에서...
+vision_response = model.generate_content([vision_prompt, img])
+abc_notation_text = ... # vision_response에서 ABC 텍스트 추출
+
+image_gen_prompt = f"""
+당신은 악보(Sheet Music) 생성 전문가입니다.
+다음 ABC 표기법 텍스트를 기반으로, 사람이 읽기 쉬운 깔끔한
+악보 이미지를 생성해주세요.
+
+{abc_notation_text}
+"""
+Nano Banana API 호출: 텍스트 프롬프트로 이미지를 생성하도록 호출합니다.
+
+Python
+
+# /simplify 함수 내부...
+image_response = image_model.generate_content(image_gen_prompt)
+
+# 이 응답은 텍스트가 아니라 이미지 데이터(바이너리)를 포함할 겁니다.
+generated_image_bytes = image_response.parts[0].data 
+3단계: API 응답 방식 변경 (백엔드)
+지금 API는 JSONResponse로 텍스트만 보냅니다. 하지만 이제는 **"생성된 악보 이미지"**를 보내야 합니다.
+
+가장 좋은 방법은 JSON 안에 텍스트 정보와 이미지 정보를 둘 다 담아 보내는 것입니다. 이미지는 'Base64'라는 텍스트로 인코딩해서 보냅니다.
+
+Base64 인코딩: main.py 상단에 import base64를 추가합니다.
+
+응답 JSON 구조 변경:
+
+Python
+
+# /simplify 함수 마지막 부분...
+
+# 1. 이미지 바이트를 Base64 텍스트로 인코딩
+img_base64_str = base64.b64encode(generated_image_bytes).decode('utf-8')
+
+# 2. 최종 결과 JSON을 만듭니다.
+final_result = {
+    "original_filename": file.filename,
+    "key": "C Major", # (이 정보도 Vision이 추출해야 함)
+    "time_signature": "4/4", # (이 정보도 Vision이 추출해야 함)
+    "simplified_abc_text": abc_notation_text, # (디버깅용 텍스트)
+    "simplified_image_base64": img_base64_str # (새로 생성된 이미지)
+}
+
+return JSONResponse(content=final_result, status_code=200)
+4단계: 프론트엔드 업그레이드 (Streamlit)
+frontend.py는 현재 simplified_notes라는 텍스트를 st.code()로 보여주게 되어있습니다. 이걸 Base64 이미지를 받아 st.image()로 보여주도록 고쳐야 합니다.
+
+frontend.py 수정:
+
+상단에 import base64 와 import io 를 추가합니다.
+
+requests.post 성공 로직 부분을 수정합니다.
+
+Python
+
+# frontend.py의 if response.status_code == 200: 부분
+
+st.success("변환 완료!")
+result = response.json()
+
+# 1. 텍스트 정보 표시 (기존)
+st.subheader("📊 분석 결과")
+col1, col2 = st.columns(2)
+col1.metric("조표 (Key)", result.get("key", "N/A"))
+col2.metric("박자표 (Time)", result.get("time_signature", "N/A"))
+
+# 2. Base64 이미지를 디코딩하여 표시 (신규)
+st.subheader("🎼 생성된 쉬운 악보")
+img_base64 = result.get("simplified_image_base64")
+
+if img_base64:
+    # Base64 텍스트를 다시 이미지 바이트로 디코딩
+    image_bytes = base64.b64decode(img_base64)
+
+    # 바이트 데이터를 Streamlit 이미지로 표시
+    st.image(image_bytes, caption="AI가 생성한 쉬운 악보")
+else:
+    st.error("악보 이미지 생성에 실패했습니다.")
+
+# 3. 디버깅용 데이터 표시 (선택사항)
+with st.expander("자세한 원본 데이터 보기 (JSON)"):
+    st.json(result)
+5단계: 최종 테스트 (End-to-End)
+백엔드 서버 (uvicorn main:app --reload)를 실행합니다.
+
+프론트엔드 서버 (streamlit run frontend.py)를 실행합니다.
+
+브라우저에서 악보 이미지를 업로드합니다.
+
+"AI가 생성한 쉬운 악보" 이미지가 화면에 뜨면... 샴페인을 터트립니다.
+
+이 로드맵대로 진행하시면 '레벨 2'까지 완성할 수 있습니다. 가장 큰 허들은 **1단계(Vision 프롬프트 엔지니어링)**입니다. 여기서 Nano Banana가 알아들을 수 있는 깔끔한 '악보 텍스트'를 뽑아내는 것이 성패를 좌우합니다.
+
+
+
+
+링크: https://gemini.google.com/share/f265004da0a9
+
+🚀 프로젝트 레벨 2: '악보 이미지'로 응답하기 로드맵
+
+#### 1단계: 1차 엔진(gemini-pro-vision) 완벽하게 조율하기 (백엔드)
+
+1.  악몽의 테스트 케이스 준비
+2.  프롬프트 엔지니어링 (핵심)
+3.  결과물 확인
+    (필수: ABC Notation 같은 '악보 기술 텍스트'를 뱉어내도록 프롬프트 수정)
+
+#### 2단계: 2차 엔진(Nano Banana) 연동하기 (백엔드)
+
+1.  모델 인스턴스 추가
+2.  Nano Banana용 프롬프트 작성
+3.  Nano Banana API 호출
+
+#### 3단계: API 응답 방식 변경 (백엔드)
+
+1.  Base64 인코딩 (import base64)
+2.  응답 JSON 구조 변경
+    (final_result 딕셔너리에 "simplified_image_base64" 키로 인코딩된 이미지 문자열 추가)
+
+#### 4단계: 프론트엔드 업그레이드 (Streamlit)
+
+1.  frontend.py 수정
+    (import base64, io 추가)
+    (st.image()를 사용하여 Base64 문자열을 디코딩하고 이미지로 표시)
+
+#### 5단계: 최종 테스트 (End-to-End)
+
+1.  백엔드 서버 (uvicorn) 실행
+2.  프론트엔드 서버 (streamlit) 실행
+3.  브라우저에서 악보 이미지 업로드
+4.  "AI가 생성한 쉬운 악보" 이미지가 화면에 뜨면 샴페인 터트리기
+
+
+
+
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
+gemini-pro-vision을 통해서 원본 악보를 텍스트로 요약
+
+수많은 테스트 케이스 준비. 다양한 케이스의 악보를 최대한 많이 준비.
+
+main.py의 prompt를 더 구체적으로 다듬어야함
+"멜로디를 C4 D4 E4 G4 같은 단순한 텍스트로 바꾸되, 새로운 이미지를 생성할 수 있도록 ABC 표기법"이나 MusicXML의 아주 간단한 형태로 변환해 줘."라고 지시해야함
+
+이 프롬프트를 통과한 simplified_notes가 새 악보를 그리기에 충분한 정보 담고잇는지 확인 
+[필수] gemini-pro-vision이 C4 D4 E4 같은 단순 텍스트가 아니라, X:1\nT:Simple Melody\nM:4/4\nK:C\nC D E F | G A B c | 같은 '악보 기술(Notation) 텍스트' (예: ABC Notation)를 뱉어내도록 프롬프트를 수정해야 함
+
+nano banana 연동해서 얻은 악보 텍스트를 진짜 이미지로 변환
+    - 모델 인스턴스 추가 (나노바나나 모델)
+    - 나노 바나나용 프롬프트 작성
+    - 나노바나나 api 호출
+
+api 응답 방식을 json 안에 텍스트 정보와 이미지 정보를 둘다 담아 보내는 방식으로 변경하여 생성된 악보 이미지 보내기
+base64 인코딩
+
+stremlit 프론트엔드 업그레이드
+
+
+uvicorn main:app --reload
+streamlit run frontend.py
+로 최종실행
