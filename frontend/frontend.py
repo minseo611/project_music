@@ -85,16 +85,26 @@ st.markdown("""
     .step-desc { font-size: 0.95rem; color: #7f8c8d; }
 
     /* ✅ [수정됨] 로그인 폼 컨테이너 (위쪽 여백 조정하여 흰 박스 제거) */
-    .auth-container {
-        max-width: 450px; 
-        margin: 50px auto; /* 위쪽 여백을 줄임 */
+    # 기존의 .auth-container { ... } 부분을 찾아서 지우고, 그 자리에 아래 코드를 복사해 넣으세요.
+
+    /* 탭(Tabs) 자체를 흰색 카드처럼 꾸미기 */
+    [data-testid="stTabs"] {
+        background-color: rgba(255, 255, 255, 0.9);
         padding: 40px;
-        background: rgba(255, 255, 255, 0.9); /* 약간 투명하게 */
         border-radius: 20px;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.1); 
-        border: 1px solid #eee; 
-        text-align: center;
-        backdrop-filter: blur(10px); /* 뒤가 비치도록 */
+        box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+        border: 1px solid #eee;
+        backdrop-filter: blur(10px);
+        max-width: 450px;       /* 너비 제한 */
+        margin: 50px auto;      /* 가운데 정렬 및 위아래 여백 */
+    }
+    
+    /* 탭 내부 버튼 높이 및 스타일 조정 */
+    .stButton > button {
+        width: 100%;
+        border-radius: 10px;
+        height: 3rem;
+        font-weight: bold;
     }
     
     /* 잠금 박스 & 캡션 */
@@ -116,11 +126,11 @@ st.markdown("""
 
 def render_login_page():
     """로그인/회원가입 페이지"""
-    # 불필요한 상단 여백 제거를 위해 바로 컨테이너 시작
-    st.markdown('<div class="auth-container">', unsafe_allow_html=True)
     
-    st.markdown("## 🔐 EasyScore 로그인")
+    # [수정됨] 제목을 가운데 정렬로 표시
+    st.markdown("<h2 style='text-align: center;'>🔐 EasyScore 로그인</h2>", unsafe_allow_html=True)
     
+    # 탭 생성 (이제 CSS 덕분에 이 탭 자체가 예쁜 흰색 박스가 됩니다)
     tab_login, tab_register = st.tabs(["로그인", "회원가입"])
     
     with tab_login:
@@ -171,9 +181,6 @@ def render_login_page():
                     st.error(f"실패: {r.json().get('detail')}")
             except Exception as e:
                 st.error(f"오류: {e}")
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
 
 def render_main_page():
     """메인 페이지"""
