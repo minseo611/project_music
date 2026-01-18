@@ -1,0 +1,69 @@
+# 맥북 시스템 파일
+.DS_Store
+
+# 파이썬 캐시 (지저분함)
+__pycache__/
+*.py[cod]
+
+# 로그 파일들 (스크린샷에 보이는 것들)
+*.log
+backend/*.log
+
+# Audiveris가 만든 임시 결과물
+*.omr
+*.musicxml
+*.mxl
+*.mid
+
+# 결과 이미지 (필요하면 주석 처리)
+backend/RESULT_*.png
+backend/RESULT_*.mid
+
+# 가상환경 (있다면)
+venv/
+env/
+# OS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Database
+users.db
+
+# Environment
+.env
+
+# IDE
+.vscode/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

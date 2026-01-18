@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+python-multipart
+music21
+streamlit
+streamlit-lottie
+requests
+Pillow
+
+passlib
+python-jose[cryptography]
