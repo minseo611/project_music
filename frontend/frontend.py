@@ -176,7 +176,7 @@ def render_login_page():
                     json={"username": r_id, "password": r_pw}
                 )
                 if r.status_code == 200:
-                    st.success("가입 완료! 로그인 탭에서 로그인하세요.")
+                    st.success("가입 완료! 로그인 탭에서 로그인하세요. ")
                 else:
                     st.error(f"실패: {r.json().get('detail')}")
             except Exception as e:
