@@ -362,7 +362,7 @@ def run_audiveris(image_bytes: bytes) -> str:
             except Exception as e:
                 raise RuntimeError(f"MIDI 처리 실패: {e}")
         else:
-             raise RuntimeError("MuseScore MIDI 변환 실패")
+             raise RuntimeError("MuseScore MIDI 변환 실패 ")
 
 def png_white_background(png_path: str) -> str:
     return png_path
