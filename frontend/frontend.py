@@ -84,9 +84,6 @@ st.markdown("""
     .step-title { font-size: 1.2rem; font-weight: 800; margin-bottom: 10px; color: #333; }
     .step-desc { font-size: 0.95rem; color: #7f8c8d; }
 
-    /* ✅ [수정됨] 로그인 폼 컨테이너 (위쪽 여백 조정하여 흰 박스 제거) */
-    # 기존의 .auth-container { ... } 부분을 찾아서 지우고, 그 자리에 아래 코드를 복사해 넣으세요.
-
     /* 탭(Tabs) 자체를 흰색 카드처럼 꾸미기 */
     [data-testid="stTabs"] {
         background-color: rgba(255, 255, 255, 0.9);
@@ -95,8 +92,8 @@ st.markdown("""
         box-shadow: 0 20px 60px rgba(0,0,0,0.1);
         border: 1px solid #eee;
         backdrop-filter: blur(10px);
-        max-width: 450px;       /* 너비 제한 */
-        margin: 50px auto;      /* 가운데 정렬 및 위아래 여백 */
+        max-width: 100%;       /* 너비 제한 */
+        margin: 20px auto;      /* 가운데 정렬 및 위아래 여백 */
     }
     
     /* 탭 내부 버튼 높이 및 스타일 조정 */
@@ -189,8 +186,8 @@ def render_main_page():
     col_hero1, col_hero2 = st.columns([1.5, 1])
     with col_hero1:
         st.markdown('<div style="height: 20px;"></div>', unsafe_allow_html=True)
-        st.markdown('<h1 class="hero-title">어려운 악보,<br>10초 만에 뚝딱.</h1>', unsafe_allow_html=True)
-        st.markdown('<p class="hero-subtitle"><b>EasyScore AI</b>가 당신의 연주를 다시 시작하게 해드립니다.<br>복잡한 리듬과 화음을 AI가 자동으로 쉽게 바꿔줍니다.</p>', unsafe_allow_html=True)
+        st.markdown('<h1 class="hero-title">어려운 악보,<br>여라가지의 난이도로 뚝딱.</h1>', unsafe_allow_html=True)
+        st.markdown('<p class="hero-subtitle"><b>EasyScore</b>가 당신의 연주를 다시 시작하게 해드립니다.<br>복잡한 리듬과 화음을 Easyscore가 자동으로 쉽게 바꿔줍니다.</p>', unsafe_allow_html=True)
         
         if st.session_state.logged_in:
             st.success(f"👋 환영합니다, **{st.session_state.username}**님!")
@@ -212,7 +209,7 @@ def render_main_page():
     st.markdown("""
     <div class="step-container">
         <div class="step-card"><div class="step-icon">📤</div><div class="step-title">STEP 1. 업로드</div><div class="step-desc">악보 사진을 올려주세요.</div></div>
-        <div class="step-card"><div class="step-icon">✨</div><div class="step-title">STEP 2. AI 변환</div><div class="step-desc">버튼만 누르면 편곡됩니다.</div></div>
+        <div class="step-card"><div class="step-icon">✨</div><div class="step-title">STEP 2. 악보 변환</div><div class="step-desc">버튼만 누르면 편곡됩니다.</div></div>
         <div class="step-card"><div class="step-icon">🎼</div><div class="step-title">STEP 3. 다운로드</div><div class="step-desc">쉬운 악보를 저장하세요.</div></div>
     </div>
     """, unsafe_allow_html=True)
@@ -309,21 +306,26 @@ def render_main_page():
             # 결과 표시
             if st.session_state.last_result:
                 result = st.session_state.last_result
-                t1, t2 = st.tabs(["🙂 Easy", "👶 Super Easy"])
+                
+                # ✅ [수정됨] Hard 탭 추가
+                t_hard, t_easy, t_super = st.tabs(["🔥 Hard", "🙂 Easy", "👶 Super Easy"])
                 
                 def show_res(ikey, mkey, pre):
+                    # 키가 없으면 기본값으로 Easy 버전 사용
                     ib64 = result.get(ikey) or result.get("simplified_image_base64")
                     mb64 = result.get(mkey) or result.get("simplified_midi_base64")
+                    
                     if ib64:
-                        st.image(safe_b64_decode(ib64), use_container_width=True)
+                        st.image(safe_b64_decode(ib64), use_container_width=1000)
                         c_a, c_b = st.columns(2)
                         c_a.download_button("🖼️ 이미지 다운", safe_b64_decode(ib64), f"{pre}.png", "image/png", use_container_width=True)
                         if mb64:
                             c_b.download_button("🎵 MIDI 다운", safe_b64_decode(mb64), f"{pre}.mid", "audio/midi", use_container_width=True)
                             st.audio(safe_b64_decode(mb64), format="audio/midi")
 
-                with t1: show_res("easy_image_base64", "easy_midi_base64", "easy_score")
-                with t2: show_res("super_easy_image_base64", "super_easy_midi_base64", "super_easy_score")
+                with t_hard: show_res("hard_image_base64", "hard_midi_base64", "hard_score")
+                with t_easy: show_res("easy_image_base64", "easy_midi_base64", "easy_score")
+                with t_super: show_res("super_easy_image_base64", "super_easy_midi_base64", "super_easy_score")
     
     else:
         st.markdown("<br><br>", unsafe_allow_html=True)

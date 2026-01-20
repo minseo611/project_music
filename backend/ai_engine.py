@@ -1,6 +1,6 @@
 # backend/ai_engine.py
 # =========================================================
-# EasyScore 2.0 - [최종 수정] 셋잇단음표(Triplet) 보존 + 에러 해결
+# EasyScore 3.9.2 - [Image Booster] 전처리 강화 (인식률 향상)
 # =========================================================
 
 import subprocess
@@ -13,17 +13,17 @@ import shutil
 import io
 import copy
 from typing import Optional, List
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 print("\n" + "="*50)
-print("🛡️ [System] EasyScore AI Engine 가동")
-print("   - Easy: 원본 리듬 유지 (셋잇단음표 복구)")
-print("   - Super Easy: 왼손 정박만 연주 (2번 칠 거 1번 치기)")
-print("   - Smart Quantize: 에러 방지 + 셋잇단음표 호환")
+print("🛡️ [System] EasyScore AI Engine (v3.9.2) 가동")
+print("   - Image: 무조건 2배~3배 확대 (Upscaling)")
+print("   - Filter: 선명도 강화 + 흑백 대비 극대화 (Binarization)")
+print("   - Goal: 빽빽한 악보(월광 3악장 등) 인식률 개선")
 print("="*50 + "\n")
 
 # =========================================================
-# 🕵️ OS 자동 감지 및 경로 설정
+# 🕵️ OS 및 경로 설정 (수정 금지)
 # =========================================================
 
 CURRENT_OS = platform.system()
@@ -95,7 +95,7 @@ def setup_music21():
 setup_music21()
 
 # =========================================================
-# 🛠️ MuseScore 변환기 (안전장치 3: shell=False 유지)
+# 🛠️ MuseScore 변환기 (🚨 절대 수정 금지 구역 3: shell=False)
 # =========================================================
 def convert_with_musescore(input_path: str, output_path: str) -> bool:
     ms_path = find_musescore()
@@ -103,15 +103,12 @@ def convert_with_musescore(input_path: str, output_path: str) -> bool:
 
     cmd = [ms_path, "-o", output_path, input_path]
     try:
-        # 🚨 [수정 금지] Windows 호환성을 위해 shell=False 유지
         subprocess.run(
             cmd, check=True, timeout=120, 
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False 
         )
-
         if os.path.exists(output_path) and os.path.getsize(output_path) > 100:
             return True
-
         base, ext = os.path.splitext(output_path)
         alt = f"{base}-1{ext}"
         if os.path.exists(alt):
@@ -121,18 +118,32 @@ def convert_with_musescore(input_path: str, output_path: str) -> bool:
     return False
 
 # =========================================================
-# 🖼️ 이미지 전처리
+# 🖼️ 이미지 전처리 (🔥 여기가 대폭 강화되었습니다!)
 # =========================================================
 def preprocess_image(image_bytes: bytes) -> bytes:
     try:
-        img = Image.open(io.BytesIO(image_bytes)).convert("L")
-        img = ImageEnhance.Contrast(img).enhance(2.0)
-        img = img.filter(ImageFilter.SHARPEN)
+        img = Image.open(io.BytesIO(image_bytes)).convert("L") # 흑백 변환
         
-        if img.width < 1000:
-             new_size = (img.width * 2, img.height * 2)
-             img = img.resize(new_size, Image.Resampling.LANCZOS)
-             
+        # 1. 무조건 확대 (최소 2000px 이상 확보)
+        target_width = 2500
+        if img.width < target_width:
+            ratio = target_width / img.width
+            new_height = int(img.height * ratio)
+            # LANCZOS 필터: 확대해도 깨짐을 최소화하는 알고리즘
+            img = img.resize((target_width, new_height), Image.Resampling.LANCZOS)
+        
+        # 2. 선명도(Sharpness) 2배 강화 -> 흐릿한 오선지 복구
+        enhancer = ImageEnhance.Sharpness(img)
+        img = enhancer.enhance(2.5) 
+        
+        # 3. 대비(Contrast) 강화 -> 회색 찌꺼기 제거
+        enhancer = ImageEnhance.Contrast(img)
+        img = enhancer.enhance(2.0)
+        
+        # 4. 이진화 (Binarization): 완전히 검거나 완전히 희게 만듦 (노이즈 제거)
+        # 160보다 밝으면 흰색, 어두우면 검은색으로 밀어버림
+        img = img.point(lambda x: 0 if x < 140 else 255, '1')
+        
         output = io.BytesIO()
         img.save(output, format="PNG")
         return output.getvalue()
@@ -140,36 +151,31 @@ def preprocess_image(image_bytes: bytes) -> bytes:
         return image_bytes
 
 # =========================================================
-# 🎵 [스마트] 박자 강제 세탁기 (여기가 수정됨!)
+# 🎵 [Core] 박자 및 편곡 로직
 # =========================================================
 def _force_clean_durations(score):
-    """
-    MusicXML 에러를 막으면서 셋잇단음표(Triplet)는 살립니다.
-    """
     try:
-        # quarterLengthDivisors=(4, 12):
-        # 4 -> 16분음표 허용
-        # 12 -> 3(셋잇단)과 4(16분)의 최소공배수 -> 셋잇단음표 허용!
         score.quantize(
             quarterLengthDivisors=(4, 12), 
             processOffsets=True, 
             processDurations=True, 
             inPlace=True
         )
-    except:
-        pass
+    except: pass
     return score
 
-# =========================================================
-# 🎵 편곡 로직
-# =========================================================
+def _clean_omr_artifacts(score):
+    try:
+        score.quantize(quarterLengthDivisors=(4, 12, 16), processOffsets=True, processDurations=True, inPlace=True)
+    except: pass
+    return score
+
 def _transpose_smart(score):
     try:
         key = score.analyze("key")
         target = music21.key.Key("C") if key.mode == "major" else music21.key.Key("a")
         interval = music21.interval.Interval(key.tonic, target.tonic)
         score = score.transpose(interval)
-
         pitches = [p.midi for p in score.flatten().pitches]
         if pitches:
             avg = sum(pitches) / len(pitches)
@@ -178,15 +184,7 @@ def _transpose_smart(score):
     except: pass
     return score
 
-def _clean_omr_artifacts(score):
-    try:
-        # 여기서도 셋잇단음표를 살리기 위해 12 추가
-        score.quantize(quarterLengthDivisors=(4, 12, 16), processOffsets=True, processDurations=True, inPlace=True)
-    except: pass
-    return score
-
 def _simplify_vertical(score_in, mode="easy"):
-    # 1. 기본 정리
     score_in = _clean_omr_artifacts(score_in)
     score_in = _force_clean_durations(score_in)
     score_in = _transpose_smart(score_in)
@@ -208,66 +206,111 @@ def _simplify_vertical(score_in, mode="easy"):
         except: flat_notes = part.flat.notes
 
         for el in flat_notes:
-            new_note = None
+            new_element_list = [] 
             
-            # --- 오른손 (Melody) ---
-            if i == 0: 
-                if isinstance(el, music21.chord.Chord):
-                    melody = el.pitches[-1]
-                    if mode == "normal" and len(el.pitches) >= 3:
-                        harmony = el.pitches[-2]
-                        new_note = music21.chord.Chord([harmony, melody])
+            # [Hard 모드: 아르페지오 로직]
+            if mode == "hard":
+                if isinstance(el, music21.note.Note) or isinstance(el, music21.chord.Chord):
+                    if isinstance(el, music21.chord.Chord):
+                        pitches = sorted(el.pitches)
+                        top_p = pitches[-1] 
+                        bot_p = pitches[0]  
                     else:
-                        new_note = music21.note.Note(melody)
-                elif isinstance(el, music21.note.Note):
-                    new_note = music21.note.Note(el.pitch)
+                        top_p = el.pitch
+                        bot_p = el.pitch
+                    
+                    if i > 0 and el.duration.quarterLength >= 1.0:
+                        n1 = music21.note.Note(bot_p)
+                        p2 = copy.deepcopy(bot_p); p2.midi += 7 
+                        n2 = music21.note.Note(p2)
+                        p3 = copy.deepcopy(bot_p); p3.midi += 12
+                        n3 = music21.note.Note(p3)
+                        n4 = music21.note.Note(p2)
 
-            # --- 왼손 (Accompaniment) ---
-            else: 
-                # 🔥 [Super Easy] 정박(1.0, 2.0) 아니면 생략 (2번 칠 거 1번 치기)
-                if mode == "super_easy":
-                    # offset이 정수가 아니면(엇박자면) 건너뜀
-                    if el.offset % 1.0 != 0:
-                        continue 
+                        dur = el.duration.quarterLength / 4.0
+                        for n in [n1, n2, n3, n4]:
+                            n.duration.quarterLength = dur
+                        
+                        n1.offset = el.offset
+                        n2.offset = el.offset + dur
+                        n3.offset = el.offset + (dur * 2)
+                        n4.offset = el.offset + (dur * 3)
+                        
+                        new_element_list = [n1, n2, n3, n4]
+                    else:
+                        if i == 0: 
+                            p_main = copy.deepcopy(top_p)
+                            p_sub = copy.deepcopy(top_p); p_sub.midi -= 12
+                            p_thd = copy.deepcopy(top_p); p_thd.midi -= 4 
+                            chord = music21.chord.Chord([p_sub, p_thd, p_main])
+                        else:
+                            p_main = copy.deepcopy(bot_p)
+                            p_sub = copy.deepcopy(bot_p); p_sub.midi -= 12
+                            chord = music21.chord.Chord([p_sub, p_main])
+                        chord.offset = el.offset
+                        chord.duration = copy.deepcopy(el.duration)
+                        new_element_list = [chord]
 
-                if isinstance(el, music21.chord.Chord):
-                    bass = el.pitches[0]
-                    new_note = music21.note.Note(bass)
-                elif isinstance(el, music21.note.Note):
-                    new_note = music21.note.Note(el.pitch)
-
-            # --- 노트 추가 ---
-            if new_note:
-                new_note.offset = el.offset
-                
-                # Super Easy는 무조건 4분음표(1박자)로 통일
-                if mode == "super_easy" and i > 0:
-                     new_note.duration.type = 'quarter'
-                     new_note.duration.quarterLength = 1.0
+            # [Easy / Super Easy 로직]
+            else:
+                new_element = None
+                if i == 0: 
+                    if isinstance(el, music21.chord.Chord):
+                        melody = el.pitches[-1]
+                        if mode == "easy" and len(el.pitches) >= 3:
+                            harmony = el.pitches[-2]
+                            new_element = music21.chord.Chord([harmony, melody])
+                        else:
+                            new_element = music21.note.Note(melody)
+                    elif isinstance(el, music21.note.Note):
+                        new_element = music21.note.Note(el.pitch)
                 else:
-                     # Easy 모드는 원본 길이 유지 (셋잇단음표도 유지됨)
-                     new_note.duration = el.duration
-                
-                try: new_note.articulations = copy.deepcopy(el.articulations)
-                except: pass
-                
-                if isinstance(new_note, music21.note.Note):
-                    if i == 0: 
-                        while new_note.pitch.midi < 60: new_note.pitch.midi += 12
-                    else: 
-                        while new_note.pitch.midi < 36: new_note.pitch.midi += 12
-                        while new_note.pitch.midi > 60: new_note.pitch.midi -= 12
+                    if mode == "super_easy":
+                        if el.offset % 1.0 != 0: continue
+                    
+                    if isinstance(el, music21.chord.Chord):
+                        bass = el.pitches[0]
+                        new_element = music21.note.Note(bass)
+                    elif isinstance(el, music21.note.Note):
+                        new_element = music21.note.Note(el.pitch)
 
-                new_part.insert(new_note.offset, new_note)
+                if new_element:
+                    new_element.offset = el.offset
+                    if mode == "super_easy" and i > 0:
+                        new_element.duration.type = 'quarter'
+                        new_element.duration.quarterLength = 1.0
+                    else:
+                        new_element.duration = copy.deepcopy(el.duration)
+                    
+                    try: new_element.articulations = copy.deepcopy(el.articulations)
+                    except: pass
+                    
+                    if i == 0: 
+                        if new_element.isChord: pass 
+                        else:
+                            while new_element.pitch.midi < 60: new_element.pitch.midi += 12
+                    else: 
+                        target_pitches = new_element.pitches if new_element.isChord else [new_element.pitch]
+                        for p in target_pitches:
+                            while p.midi < 36: p.midi += 12
+                            while p.midi > 60: p.midi -= 12
+                    
+                    new_element_list = [new_element]
+
+            for item in new_element_list:
+                new_part.insert(item.offset, item)
         
-        # 마지막으로 박자 정리
-        new_part = _force_clean_durations(new_part)
+        try:
+            if mode == "hard": new_part.makeBeams(inPlace=True)
+        except: pass
+        
         new_score.insert(0, new_part)
-        
+
+    new_score = _force_clean_durations(new_score)
     return new_score
 
 # =========================================================
-# 🚀 메인 엔진 1: Audiveris (안전장치 1 유지)
+# 🚀 메인 엔진 1: Audiveris (🚨 절대 수정 금지 구역 1: MIDI 우회)
 # =========================================================
 def run_audiveris(image_bytes: bytes) -> str:
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -294,7 +337,6 @@ def run_audiveris(image_bytes: bytes) -> str:
         
         print("⚙️ Audiveris 엔진 가동...")
         try:
-            # 🚨 [수정 금지] shell=False 유지
             subprocess.run(
                 command, check=True, timeout=180, 
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=False 
@@ -312,27 +354,32 @@ def run_audiveris(image_bytes: bytes) -> str:
 
         if not found_file: raise RuntimeError("변환된 악보 파일을 찾을 수 없습니다.")
 
-        # 🔥 [안전장치 1 유지] XML 파싱 실패 시 MIDI 우회
+        # [Safety Check] MIDI 우회 전략 보존
         midi_path = os.path.join(temp_dir, "clean_score.mid")
         if convert_with_musescore(found_file, midi_path):
             try:
                 score = music21.converter.parse(midi_path)
-                
-                # 📌 [FIX] 스마트 박자 세탁기 (셋잇단음표 유지)
                 score = _force_clean_durations(score)
                 
+                # ✅ [OMR Check] 인식률 검사
+                total_notes = len(score.flatten().notes)
+                print(f"📊 인식된 음표 개수: {total_notes}개")
+                
+                if total_notes < 10:
+                    raise RuntimeError("악보가 너무 복잡하거나 흐릿해서 음표를 인식하지 못했습니다.")
+
                 clean_xml_output = os.path.join(temp_dir, "final_output.musicxml")
                 score.write('musicxml', fp=clean_xml_output)
                 with open(clean_xml_output, "r", encoding="utf-8") as f:
                     return f.read()
             except Exception as e:
-                print(f"❌ MIDI 우회 실패 원인: {e}")
-                raise RuntimeError(f"악보 변환 중 치명적 오류 발생: {e}")
+                print(f"❌ MIDI 우회 또는 검증 실패: {e}")
+                raise RuntimeError(f"{e}")
         else:
              raise RuntimeError("MuseScore MIDI 변환 실패")
 
 # =========================================================
-# 🚀 메인 엔진 2: 단순화 및 파일 생성 (안전장치 2 유지)
+# 🚀 메인 엔진 2: 3단 변환 (🚨 절대 수정 금지 구역 2: 2중 변환)
 # =========================================================
 def simplify_and_generate(music_xml_content: str) -> dict:
     setup_music21()
@@ -350,12 +397,12 @@ def simplify_and_generate(music_xml_content: str) -> dict:
         try: os.unlink(tmp_path)
         except: pass
     
-    print("🌿 [Processing] 편곡 및 이미지 생성 시작...")
+    print("🌿 [Processing] 3단계 난이도 생성 중...")
     
-    normal_score = _simplify_vertical(score_in, mode="normal")
+    hard_score = _simplify_vertical(score_in, mode="hard")
+    normal_score = _simplify_vertical(score_in, mode="easy")
     super_score = _simplify_vertical(score_in, mode="super_easy")
     
-    # 🔥 [안전장치 2 유지] 2중 변환 로직
     def _generate_outputs(score_obj):
         out_midi = None
         out_png = None
@@ -364,19 +411,15 @@ def simplify_and_generate(music_xml_content: str) -> dict:
                 xml_path = os.path.join(temp, "score.musicxml")
                 score_obj.write("musicxml", xml_path)
                 
-                # MIDI 생성
                 midi_path = os.path.join(temp, "score.mid")
                 if convert_with_musescore(xml_path, midi_path):
                     with open(midi_path, "rb") as f:
                         out_midi = base64.b64encode(f.read()).decode()
                 
-                # PNG 생성 (1차 시도: XML -> PNG)
                 png_path = os.path.join(temp, "score.png")
                 success = convert_with_musescore(xml_path, png_path)
                 
-                # PNG 생성 (2차 시도: 실패 시 MIDI -> PNG 우회)
                 if not success and out_midi:
-                    print("⚠️ XML->PNG 변환 실패. MIDI->PNG 우회 전략 실행!")
                     midi_temp = os.path.join(temp, "temp_fallback.mid")
                     with open(midi_temp, "wb") as f:
                         f.write(base64.b64decode(out_midi))
@@ -395,10 +438,13 @@ def simplify_and_generate(music_xml_content: str) -> dict:
             pass
         return out_midi, out_png
 
+    hard_midi, hard_png = _generate_outputs(hard_score)
     norm_midi, norm_png = _generate_outputs(normal_score)
     super_midi, super_png = _generate_outputs(super_score)
     
     return {
+        "hard_midi_base64": hard_midi,
+        "hard_image_base64": hard_png,
         "easy_midi_base64": norm_midi,
         "easy_image_base64": norm_png,
         "super_easy_midi_base64": super_midi,
