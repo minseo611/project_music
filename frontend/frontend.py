@@ -40,19 +40,19 @@ def load_lottieurl(url: str):
         return r.json() if r.status_code == 200 else None
     except: return None
 
-# ✅ [수정됨] 배경 투명하고 확실하게 나오는 '음악 로딩' 애니메이션
-lottie_music = load_lottieurl("https://assets5.lottiefiles.com/packages/lf20_w51pcehl.json")
+# 배경 투명 애니메이션
+lottie_music = load_lottieurl("https://assets10.lottiefiles.com/packages/lf20_3rw3x5te.json")
 lottie_processing = load_lottieurl("https://lottie.host/5b630713-3333-4009-81cd-58a529944c33/lC71X2hL9r.json") 
 
 # =============================================================================
-# 3. CSS 디자인 (로그인 박스 위치 수정 포함)
+# 3. CSS 디자인 (입력창/버튼 가시성 완벽 고정)
 # =============================================================================
 st.markdown("""
     <style>
     @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css");
     html, body, [class*="css"] { font-family: 'Pretendard', sans-serif; }
     
-    /* 배경 설정 */
+    /* 1. 전체 배경 무조건 흰색 고정 */
     .stApp {
         background-color: #ffffff;
         background-image: 
@@ -63,14 +63,78 @@ st.markdown("""
         background-attachment: fixed;
     }
 
+    /* 2. 텍스트 색상 강제 검정 (다크모드 방지) */
+    .stMarkdown, .stText, p, h1, h2, h3, h4, h5, h6, label, span, div {
+        color: #31333F !important;
+    }
+    
+    /* 3. [입력창 수정] 배경 흰색, 글씨 검정 무조건 고정 */
+    div[data-baseweb="input"] {
+        background-color: #ffffff !important;
+        border: 1px solid #d1d1d1 !important;
+    }
+    div[data-baseweb="base-input"] {
+        background-color: #ffffff !important;
+    }
+    /* 실제 입력되는 텍스트 색상 */
+    input[type="text"], input[type="password"] {
+        color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
+        caret-color: #000000 !important;
+    }
+
+    /* 4. 파일 업로더 박스 스타일 */
+    [data-testid="stFileUploaderDropzone"] {
+        background-color: #f7f9fc !important;
+        border: 1px dashed #a0a0a0 !important;
+    }
+    [data-testid="stFileUploaderDropzone"] div,
+    [data-testid="stFileUploaderDropzone"] span,
+    [data-testid="stFileUploaderDropzone"] small {
+        color: #31333F !important;
+    }
+    [data-testid="stFileUploaderDropzone"] button {
+        background-color: #ffffff !important;
+        color: #31333F !important;
+        border: 1px solid #d1d1d1 !important;
+    }
+
+    /* 5. [버튼 수정] 진한 회색 배경 + 흰색 글씨로 통일 */
+    .stButton > button {
+        width: 100%; 
+        border-radius: 10px; 
+        height: 3rem; 
+        font-weight: bold;
+        background-color: #333333 !important; /* 진한 회색 배경 */
+        color: #ffffff !important;             /* 흰색 글씨 */
+        border: none !important;
+    }
+    
+    .stButton > button:hover {
+        background-color: #555555 !important; /* 호버 시 약간 밝게 */
+        color: #ffffff !important;
+    }
+
+    /* 버튼 안의 텍스트 강제 흰색 */
+    .stButton > button p {
+        color: #ffffff !important;
+    }
+
+    /* 6. Primary 버튼 안전장치 */
+    button[kind="primary"] {
+        background-color: #1a1a1a !important;
+        color: #ffffff !important;
+    }
+
     /* 타이틀 스타일 */
     .hero-title {
         font-size: 4.5rem; font-weight: 900;
         background: linear-gradient(135deg, #2c3e50 30%, #667eea 100%);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         line-height: 1.2; margin-bottom: 20px;
+        color: transparent !important; 
     }
-    .hero-subtitle { font-size: 1.4rem; color: #546e7a; line-height: 1.6; margin-bottom: 2rem; }
+    .hero-subtitle { font-size: 1.4rem; color: #546e7a !important; line-height: 1.6; margin-bottom: 2rem; }
     
     /* 스텝 카드 */
     .step-container { display: flex; justify-content: space-between; gap: 20px; margin-top: 40px; margin-bottom: 60px; }
@@ -81,10 +145,10 @@ st.markdown("""
     }
     .step-card:hover { transform: translateY(-10px); }
     .step-icon { font-size: 3rem; margin-bottom: 15px; }
-    .step-title { font-size: 1.2rem; font-weight: 800; margin-bottom: 10px; color: #333; }
-    .step-desc { font-size: 0.95rem; color: #7f8c8d; }
+    .step-title { font-size: 1.2rem; font-weight: 800; margin-bottom: 10px; color: #333 !important; }
+    .step-desc { font-size: 0.95rem; color: #7f8c8d !important; }
 
-    /* 탭(Tabs) 자체를 흰색 카드처럼 꾸미기 */
+    /* 탭 스타일 */
     [data-testid="stTabs"] {
         background-color: rgba(255, 255, 255, 0.9);
         padding: 40px;
@@ -92,16 +156,8 @@ st.markdown("""
         box-shadow: 0 20px 60px rgba(0,0,0,0.1);
         border: 1px solid #eee;
         backdrop-filter: blur(10px);
-        max-width: 100%;       /* 너비 제한 */
-        margin: 20px auto;      /* 가운데 정렬 및 위아래 여백 */
-    }
-    
-    /* 탭 내부 버튼 높이 및 스타일 조정 */
-    .stButton > button {
-        width: 100%;
-        border-radius: 10px;
-        height: 3rem;
-        font-weight: bold;
+        max-width: 100%;
+        margin: 20px auto;
     }
     
     /* 잠금 박스 & 캡션 */
@@ -111,7 +167,7 @@ st.markdown("""
     }
     .caption-box {
         text-align: center; padding: 15px; background: #ffffff; border-radius: 12px;
-        font-weight: 800; color: #455a64; margin-bottom: 20px; border: 1px solid #eee;
+        font-weight: 800; color: #455a64 !important; margin-bottom: 20px; border: 1px solid #eee;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -124,14 +180,12 @@ st.markdown("""
 def render_login_page():
     """로그인/회원가입 페이지"""
     
-    # [수정됨] 제목을 가운데 정렬로 표시
     st.markdown("<h2 style='text-align: center;'>🔐 EasyScore 로그인</h2>", unsafe_allow_html=True)
     
-    # 탭 생성 (이제 CSS 덕분에 이 탭 자체가 예쁜 흰색 박스가 됩니다)
     tab_login, tab_register = st.tabs(["로그인", "회원가입"])
     
     with tab_login:
-        st.write("") # 간격 조절
+        st.write("") 
         l_id = st.text_input("아이디", key="login_id")
         l_pw = st.text_input("비밀번호", type="password", key="login_pw")
         
@@ -186,7 +240,7 @@ def render_main_page():
     col_hero1, col_hero2 = st.columns([1.5, 1])
     with col_hero1:
         st.markdown('<div style="height: 20px;"></div>', unsafe_allow_html=True)
-        st.markdown('<h1 class="hero-title">어려운 악보,<br>여라가지의 난이도로 뚝딱.</h1>', unsafe_allow_html=True)
+        st.markdown('<h1 class="hero-title">어려운 악보,<br>여러가지의 난이도로 뚝딱.</h1>', unsafe_allow_html=True)
         st.markdown('<p class="hero-subtitle"><b>EasyScore</b>가 당신의 연주를 다시 시작하게 해드립니다.<br>복잡한 리듬과 화음을 Easyscore가 자동으로 쉽게 바꿔줍니다.</p>', unsafe_allow_html=True)
         
         if st.session_state.logged_in:
@@ -249,23 +303,20 @@ def render_main_page():
         with col_r:
             st.caption("🎹 변환 결과")
             
-            # ✅ [수정됨] 진행바와 상태 메시지가 나오는 변환 버튼 로직
             if st.button("변환 시작", type="primary", use_container_width=True):
                 
-                # 1. 상태 표시 컨테이너 (애니메이션 + 진행바)
+                # 상태 표시 컨테이너
                 status_container = st.empty()
                 progress_bar = st.progress(0)
                 status_text = st.empty()
 
                 with status_container.container():
-                    # 투명 배경 애니메이션 표시
                     if lottie_processing:
                         st_lottie(lottie_processing, height=200, key="proc_ani")
                     else:
                         st.spinner("작업 중...")
                 
                 try:
-                    # 진행률 시뮬레이션 (10% -> 30%)
                     status_text.text("서버에 파일을 전송하고 있습니다...")
                     progress_bar.progress(10)
                     time.sleep(0.5)
@@ -277,10 +328,8 @@ def render_main_page():
                     files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
                     headers = {"Authorization": f"Bearer {st.session_state.token}"}
                     
-                    # 서버 요청 (시간이 좀 걸림)
                     r = requests.post(API_URL, files=files, headers=headers, timeout=300)
                     
-                    # 진행률 마무리 (80% -> 100%)
                     status_text.text("쉬운 악보를 생성하고 있습니다...")
                     progress_bar.progress(80)
                     time.sleep(0.5)
@@ -298,7 +347,6 @@ def render_main_page():
                 except Exception as e:
                     st.error(f"연결 오류: {e}")
                 finally:
-                    # 작업 끝나면 로딩창 지우기
                     status_container.empty()
                     progress_bar.empty()
                     status_text.empty()
@@ -307,23 +355,20 @@ def render_main_page():
             if st.session_state.last_result:
                 result = st.session_state.last_result
                 
-                # ✅ [수정됨] Hard 탭 추가
-                t_hard, t_easy, t_super = st.tabs(["🔥 Hard", "🙂 Easy", "👶 Super Easy"])
+                # ✅ [수정됨] Hard 탭 제거 -> Easy, Super Easy만 남김
+                t_easy, t_super = st.tabs(["🙂 Easy", "👶 Super Easy"])
                 
                 def show_res(ikey, mkey, pre):
-                    # 키가 없으면 기본값으로 Easy 버전 사용
                     ib64 = result.get(ikey) or result.get("simplified_image_base64")
                     mb64 = result.get(mkey) or result.get("simplified_midi_base64")
                     
                     if ib64:
-                        st.image(safe_b64_decode(ib64), use_container_width=1000)
+                        st.image(safe_b64_decode(ib64), use_container_width=True)
                         c_a, c_b = st.columns(2)
                         c_a.download_button("🖼️ 이미지 다운", safe_b64_decode(ib64), f"{pre}.png", "image/png", use_container_width=True)
                         if mb64:
                             c_b.download_button("🎵 MIDI 다운", safe_b64_decode(mb64), f"{pre}.mid", "audio/midi", use_container_width=True)
-                            st.audio(safe_b64_decode(mb64), format="audio/midi")
 
-                with t_hard: show_res("hard_image_base64", "hard_midi_base64", "hard_score")
                 with t_easy: show_res("easy_image_base64", "easy_midi_base64", "easy_score")
                 with t_super: show_res("super_easy_image_base64", "super_easy_midi_base64", "super_easy_score")
     
