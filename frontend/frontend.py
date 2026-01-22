@@ -40,8 +40,8 @@ def load_lottieurl(url: str):
         return r.json() if r.status_code == 200 else None
     except: return None
 
-# 배경 투명 애니메이션
-lottie_music = load_lottieurl("https://assets10.lottiefiles.com/packages/lf20_3rw3x5te.json")
+# ✅ [수정됨] 원래 나오던 피아노/음악 애니메이션으로 복구 완료!
+lottie_music = load_lottieurl("https://assets5.lottiefiles.com/packages/lf20_w51pcehl.json")
 lottie_processing = load_lottieurl("https://lottie.host/5b630713-3333-4009-81cd-58a529944c33/lC71X2hL9r.json") 
 
 # =============================================================================
@@ -240,7 +240,7 @@ def render_main_page():
     col_hero1, col_hero2 = st.columns([1.5, 1])
     with col_hero1:
         st.markdown('<div style="height: 20px;"></div>', unsafe_allow_html=True)
-        st.markdown('<h1 class="hero-title">어려운 악보,<br>여러가지의 난이도로 뚝딱.</h1>', unsafe_allow_html=True)
+        st.markdown('<h1 class="hero-title">어려운 악보,<br>다양한 난이도로 뚝딱.</h1>', unsafe_allow_html=True)
         st.markdown('<p class="hero-subtitle"><b>EasyScore</b>가 당신의 연주를 다시 시작하게 해드립니다.<br>복잡한 리듬과 화음을 Easyscore가 자동으로 쉽게 바꿔줍니다.</p>', unsafe_allow_html=True)
         
         if st.session_state.logged_in:
@@ -393,6 +393,6 @@ else:
 
 st.markdown("""
     <div style="text-align:center; padding: 4rem 2rem; color: #90a4ae; border-top: 1px solid #f1f3f5; margin-top: 50px;">
-        <p>© 2026 EasyScore AI Project.</p>
+        <p>© 2026 EasyScore Project.</p>
     </div>
 """, unsafe_allow_html=True)
