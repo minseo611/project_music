@@ -22,6 +22,9 @@ st.set_page_config(
 # =============================================================================
 DEFAULT_BACKEND = "http://127.0.0.1:8000"
 
+# [NEW] 변환 결과를 저장할 세션 상태 추가 (새로고침 방지)
+if "conversion_results" not in st.session_state: st.session_state.conversion_results = []
+
 if "logged_in" not in st.session_state: st.session_state.logged_in = False
 if "token" not in st.session_state: st.session_state.token = ""
 if "username" not in st.session_state: st.session_state.username = ""
@@ -40,7 +43,7 @@ def load_lottieurl(url: str):
     except: return None
 
 lottie_music = load_lottieurl("https://assets5.lottiefiles.com/packages/lf20_w51pcehl.json")
-lottie_processing = load_lottieurl("https://lottie.host/5b630713-3333-4009-81cd-58a529944c33/lC71X2hL9r.json") 
+# lottie_processing = load_lottieurl("https://lottie.host/5b630713-3333-4009-81cd-58a529944c33/lC71X2hL9r.json") 
 
 # =============================================================================
 # 3. CSS 디자인
@@ -224,12 +227,12 @@ def render_main_page():
         st.markdown('<div class="nav-button-container">', unsafe_allow_html=True)
         if st.session_state.logged_in:
             if st.button("로그아웃", use_container_width=True):
-                st.session_state.logged_in = False; st.session_state.token = ""; st.session_state.last_result = None; st.rerun()
+                st.session_state.logged_in = False; st.session_state.token = ""; st.session_state.conversion_results = []; st.rerun()
         else:
             if st.button("로그인 / 회원가입", type="primary", use_container_width=True): st.session_state.show_auth = True; st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # 🔥 [중요] 컬럼 비율 1.1 : 1.1 유지 (두 요소 간 거리 좁힘)
+    # 🔥 [중요] 컬럼 비율 1.1 : 1.1 유지
     col_hero1, col_hero2 = st.columns([1.1, 1.1])
     
     with col_hero1:
@@ -271,13 +274,21 @@ def render_main_page():
     with st.container():
         uploaded_files = st.file_uploader("악보 이미지를 업로드하세요 (JPG, PNG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
+    # ------------------------------------------------------------------------------------------------
+    # 🔥 [수정됨] 1. 변환 버튼 로직 (세션에 저장하고 Rerun)
+    # ------------------------------------------------------------------------------------------------
     if uploaded_files:
         st.write(f"총 **{len(uploaded_files)}장**의 악보가 선택되었습니다.")
         
         if st.button("일괄 변환 시작", type="primary", use_container_width=True):
+            # 변환 시작 전 초기화
+            st.session_state.conversion_results = []
+            
             total_progress = st.progress(0)
             status_text = st.empty()
-            result_containers = [st.container() for _ in range(len(uploaded_files))]
+            
+            # 진행상황을 보여줄 컨테이너 미리 생성 (처리 중에만 보임)
+            temp_containers = [st.container() for _ in range(len(uploaded_files))]
 
             for idx, uploaded_file in enumerate(uploaded_files):
                 current_num = idx + 1
@@ -291,60 +302,103 @@ def render_main_page():
                     r = requests.post(API_URL, files=files, headers=headers, timeout=300)
                     
                     if r.status_code == 200:
-                        result = r.json()
-                        with result_containers[idx]:
-                            with st.expander(f"완료: {uploaded_file.name}", expanded=True):
-                                t_easy, t_super = st.tabs(["Easy", "Super Easy"])
-                                
-                                def show_res(ikey, mkey, pre):
-                                    ib64 = result.get(ikey) or result.get("simplified_image_base64")
-                                    mb64 = result.get(mkey) or result.get("simplified_midi_base64")
-                                    
-                                    if ib64:
-                                        # =================================================
-                                        # 🔥 레이아웃 조정: 왼쪽 여백 추가로 전체를 오른쪽으로 이동
-                                        # [0.4(빈칸), 1.2(컨트롤), 3.0(악보)] 비율로 조정
-                                        # =================================================
-                                        _, c_control, c_sheet = st.columns([0.4, 1.2, 3.0], vertical_alignment="center")
-                                        filename_prefix = f"{uploaded_file.name}_{pre}"
-                                        
-                                        with c_control:
-                                            st.markdown(f"""
-                                            <div class="control-panel-box">
-                                                <div class="success-badge">✨ Conversion Success</div>
-                                                <span class="info-label">File Name</span>
-                                                <span class="info-value">{uploaded_file.name}</span>
-                                                <span class="info-label">Mode</span>
-                                                <span class="info-value">{pre.replace('_', ' ').title()}</span>
-                                                <hr style="margin: 15px 0; border: 0; border-top: 1px solid #ddd;">
-                                                <p style="font-size:0.9rem; color:#666;">아래 버튼을 눌러 저장하세요.</p>
-                                            </div>
-                                            """, unsafe_allow_html=True)
-                                            
-                                            st.write("")
-                                            st.download_button("🖼️ 이미지 다운로드", safe_b64_decode(ib64), f"{filename_prefix}.png", "image/png", use_container_width=True)
-                                            if mb64:
-                                                st.write("")
-                                                st.download_button("🎵 MIDI 다운로드", safe_b64_decode(mb64), f"{filename_prefix}.mid", "audio/midi", use_container_width=True)
-                                        
-                                        with c_sheet:
-                                            clean_b64 = re.sub(r"\s+", "", ib64)
-                                            img_html = f'<img src="data:image/png;base64,{clean_b64}" class="score-image-shadow" style="max-height: 80vh; width: auto; max-width: 100%; display: block; margin: 0 auto;">'
-                                            st.markdown(img_html, unsafe_allow_html=True)
-
-                                with t_easy: show_res("easy_image_base64", "easy_midi_base64", "easy_score")
-                                with t_super: show_res("super_easy_image_base64", "super_easy_midi_base64", "super_easy_score")
+                        result_data = r.json()
+                        # 🔥 세션에 저장 (이름과 결과 데이터)
+                        st.session_state.conversion_results.append({
+                            "filename": uploaded_file.name,
+                            "data": result_data,
+                            "success": True
+                        })
+                        with temp_containers[idx]:
+                            st.success(f"✅ {uploaded_file.name} 완료")
                     
                     elif r.status_code == 401:
                         st.error("로그인이 만료되었습니다."); st.session_state.logged_in = False; st.rerun(); break
                     else:
-                        with result_containers[idx]: st.error(f"❌ {uploaded_file.name} 실패: {r.text}")
+                        st.session_state.conversion_results.append({
+                            "filename": uploaded_file.name,
+                            "error": r.text,
+                            "success": False
+                        })
+                        with temp_containers[idx]:
+                            st.error(f"❌ {uploaded_file.name} 실패")
+                            
                 except Exception as e:
-                    with result_containers[idx]: st.error(f"❌ {uploaded_file.name} 에러: {e}")
+                    st.session_state.conversion_results.append({
+                        "filename": uploaded_file.name,
+                        "error": str(e),
+                        "success": False
+                    })
+                    with temp_containers[idx]:
+                        st.error(f"❌ {uploaded_file.name} 에러")
                 
                 total_progress.progress(int((current_num / total_count) * 100))
 
-            status_text.success("모든 변환 작업이 완료되었습니다!"); st.balloons()
+            status_text.success("모든 변환 작업이 완료되었습니다! 결과가 아래에 표시됩니다.")
+            time.sleep(1) # 잠시 대기 후 리프레시
+            st.rerun()
+
+    # ------------------------------------------------------------------------------------------------
+    # 🔥 [수정됨] 2. 결과 렌더링 로직 (세션에 데이터가 있으면 항상 표시)
+    # ------------------------------------------------------------------------------------------------
+    if st.session_state.conversion_results:
+        st.markdown("---")
+        st.subheader("🎹 변환 결과 확인 및 다운로드")
+        
+        for item in st.session_state.conversion_results:
+            fname = item["filename"]
+            
+            if not item["success"]:
+                st.error(f"❌ {fname} 변환 실패: {item.get('error', '알 수 없는 오류')}")
+                continue
+
+            result = item["data"]
+            
+            # 기존 UI 코드를 그대로 사용하여 결과 표시
+            with st.expander(f"완료: {fname}", expanded=True):
+                t_easy, t_super = st.tabs(["Easy", "Super Easy"])
+                
+                def show_res(ikey, mkey, pre):
+                    ib64 = result.get(ikey) or result.get("simplified_image_base64")
+                    mb64 = result.get(mkey) or result.get("simplified_midi_base64")
+                    
+                    if ib64:
+                        # 레이아웃 비율 유지
+                        _, c_control, c_sheet = st.columns([0.4, 1.2, 3.0], vertical_alignment="center")
+                        filename_prefix = f"{fname}_{pre}"
+                        
+                        with c_control:
+                            st.markdown(f"""
+                            <div class="control-panel-box">
+                                <div class="success-badge">✨ Conversion Success</div>
+                                <span class="info-label">File Name</span>
+                                <span class="info-value">{fname}</span>
+                                <span class="info-label">Mode</span>
+                                <span class="info-value">{pre.replace('_', ' ').title()}</span>
+                                <hr style="margin: 15px 0; border: 0; border-top: 1px solid #ddd;">
+                                <p style="font-size:0.9rem; color:#666;">아래 버튼을 눌러 저장하세요.</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.write("")
+                            # 🔥 [핵심] 다운로드 버튼을 눌러도 이 블록은 st.session_state 덕분에 사라지지 않음
+                            st.download_button("🖼️ 이미지 다운로드", safe_b64_decode(ib64), f"{filename_prefix}.png", "image/png", use_container_width=True, key=f"btn_img_{filename_prefix}")
+                            if mb64:
+                                st.write("")
+                                st.download_button("🎵 MIDI 다운로드", safe_b64_decode(mb64), f"{filename_prefix}.mid", "audio/midi", use_container_width=True, key=f"btn_mid_{filename_prefix}")
+                        
+                        with c_sheet:
+                            clean_b64 = re.sub(r"\s+", "", ib64)
+                            img_html = f'<img src="data:image/png;base64,{clean_b64}" class="score-image-shadow" style="max-height: 80vh; width: auto; max-width: 100%; display: block; margin: 0 auto;">'
+                            st.markdown(img_html, unsafe_allow_html=True)
+
+                with t_easy: show_res("easy_image_base64", "easy_midi_base64", "easy_score")
+                with t_super: show_res("super_easy_image_base64", "super_easy_midi_base64", "super_easy_score")
+        
+        # 다시하기 버튼
+        if st.button("다른 악보 변환하기 (초기화)", use_container_width=True):
+            st.session_state.conversion_results = []
+            st.rerun()
 
 # =============================================================================
 # 5. 실행
