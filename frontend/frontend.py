@@ -272,7 +272,7 @@ def render_main_page():
         uploaded_files = st.file_uploader("악보 이미지를 업로드하세요 (JPG, PNG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
     if uploaded_files:
-        st.write(f"📂 총 **{len(uploaded_files)}장**의 악보가 선택되었습니다.")
+        st.write(f"총 **{len(uploaded_files)}장**의 악보가 선택되었습니다.")
         
         if st.button("일괄 변환 시작", type="primary", use_container_width=True):
             total_progress = st.progress(0)
@@ -293,8 +293,8 @@ def render_main_page():
                     if r.status_code == 200:
                         result = r.json()
                         with result_containers[idx]:
-                            with st.expander(f"✅ 완료: {uploaded_file.name}", expanded=True):
-                                t_easy, t_super = st.tabs(["🙂 Easy", "👶 Super Easy"])
+                            with st.expander(f"완료: {uploaded_file.name}", expanded=True):
+                                t_easy, t_super = st.tabs(["Easy", "Super Easy"])
                                 
                                 def show_res(ikey, mkey, pre):
                                     ib64 = result.get(ikey) or result.get("simplified_image_base64")
