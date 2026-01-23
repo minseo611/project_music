@@ -117,15 +117,33 @@ st.markdown("""
         background-color: white;
     }
 
-    /* 타이틀 및 기타 */
+    /* 🔥 [복구 완료] 타이틀 왼쪽 정렬 (오른쪽 밀기 제거) */
     .hero-title {
-        font-size: 4.5rem; font-weight: 900;
+        font-size: 5.5rem; 
+        font-weight: 900;
         background: linear-gradient(135deg, #2c3e50 30%, #667eea 100%);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        line-height: 1.2; margin-bottom: 20px;
+        line-height: 1.1; 
+        margin-bottom: 20px;
         color: transparent !important; 
+        
+        /* 왼쪽 정렬 */
+        text-align: left !important;
+        padding-left: 0 !important;
+        margin-left: 0 !important;
     }
-    .hero-subtitle { font-size: 1.4rem; color: #546e7a !important; line-height: 1.6; margin-bottom: 2rem; }
+    
+    .hero-subtitle { 
+        font-size: 1.6rem; 
+        color: #546e7a !important; 
+        line-height: 1.5; 
+        margin-bottom: 2rem; 
+        
+        /* 왼쪽 정렬 */
+        text-align: left !important;
+        padding-left: 0 !important;
+        margin-left: 0 !important;
+    }
 
     .step-container { display: flex; justify-content: space-between; gap: 20px; margin-top: 40px; margin-bottom: 60px; }
     .step-card {
@@ -156,7 +174,18 @@ st.markdown("""
     }
 
     .nav-button-container { margin-top: -10px; }
-    .hero-lottie-container { margin-left: 30px; }
+    
+    /* 애니메이션 위치 (약간 왼쪽 유지) */
+    .hero-lottie-container { 
+        margin-left: -60px !important; 
+    }
+
+    /* 🔥 [NEW] Lottie 애니메이션 배경 투명하게 만들기 */
+    .hero-lottie-container > div > iframe,
+    .hero-lottie-container > div {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -189,6 +218,7 @@ def render_login_page():
             except Exception as e: st.error(f"오류: {e}")
 
 def render_main_page():
+    # 상단 네비게이션
     col_nav1, col_nav2 = st.columns([6, 1])
     with col_nav2:
         st.markdown('<div class="nav-button-container">', unsafe_allow_html=True)
@@ -199,10 +229,12 @@ def render_main_page():
             if st.button("로그인 / 회원가입", type="primary", use_container_width=True): st.session_state.show_auth = True; st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    col_hero1, col_hero2 = st.columns([1.5, 1])
+    # 🔥 [중요] 컬럼 비율 1.1 : 1.1 유지 (두 요소 간 거리 좁힘)
+    col_hero1, col_hero2 = st.columns([1.1, 1.1])
+    
     with col_hero1:
         st.markdown('<div style="height: 20px;"></div>', unsafe_allow_html=True)
-        st.markdown('<h1 class="hero-title">어려운 악보,<br>여러가지의 난이도로 뚝딱.</h1>', unsafe_allow_html=True)
+        st.markdown('<h1 class="hero-title">세상 모든 악보를,<br>당신의 손에 맞게.</h1>', unsafe_allow_html=True)
         st.markdown('<p class="hero-subtitle"><b>EasyScore</b>가 당신의 연주를 다시 시작하게 해드립니다.<br>복잡한 리듬과 화음을 Easyscore가 자동으로 쉽게 바꿔줍니다.</p>', unsafe_allow_html=True)
         if st.session_state.logged_in: st.success(f"환영합니다, **{st.session_state.username}**님!")
     with col_hero2:
@@ -214,7 +246,7 @@ def render_main_page():
     st.markdown("""
     <div class="step-container">
         <div class="step-card"><div class="step-icon">📤</div><div class="step-title">STEP 1. 업로드</div><div class="step-desc">여러 장의 악보를<br>한 번에 올려보세요.</div></div>
-        <div class="step-card"><div class="step-icon">✨</div><div class="step-title">STEP 2. 일괄 변환</div><div class="step-desc">버튼 한 번으로<br>모두 변환됩니다.</div></div>
+        <div class="step-card"><div class="step-icon">✨</div><div class="step-title">STEP 2. 변환</div><div class="step-desc">버튼 한 번으로<br>모두 변환됩니다.</div></div>
         <div class="step-card"><div class="step-icon">🎼</div><div class="step-title">STEP 3. 다운로드</div><div class="step-desc">각각의 결과를<br>확인하고 저장하세요.</div></div>
     </div>
     """, unsafe_allow_html=True)
