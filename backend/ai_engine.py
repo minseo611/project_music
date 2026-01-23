@@ -1,7 +1,10 @@
-# backend/ai_engine.py
-# =========================================================
-# EasyScore 3.9.2 - [Image Booster] 전처리 강화 (인식률 향상)
-# =========================================================
+"""
+1. 파이썬
+2. music21 - 악보 데이터를 수학적으로 분석하는 라이브러리. 편곡 작업 담당
+3. PIL (Pillow) - 이미지 전처리 및 후처리를 위한 라이브러리. 업로드 된 악보 이미지 개선
+4. audiveris - 오픈소스 OMR(광학 악보 인식) 엔진. 이미지에서 악보 데이터를 추출. 음표를 musicxml로 변환
+5. musescore4 - 악보 편집기. musicxml을 MIDI 및 PNG로 변환하는 데 사용
+"""
 
 import subprocess
 import music21
@@ -23,7 +26,7 @@ print("   - Goal: 빽빽한 악보(월광 3악장 등) 인식률 개선")
 print("="*50 + "\n")
 
 # =========================================================
-# 🕵️ OS 및 경로 설정 (수정 금지)
+# 🕵️ OS 및 경로 설정 - musescore, audveris이 어디있는지 위치 정보 제공
 # =========================================================
 
 CURRENT_OS = platform.system()
@@ -83,7 +86,7 @@ def find_audiveris_info() -> dict:
     
     raise RuntimeError("Audiveris를 찾을 수 없습니다.")
 
-def setup_music21():
+def setup_music21(): # music21에게 musescore 위치 알려주기
     try:
         ms = find_musescore()
         if ms:
@@ -92,22 +95,22 @@ def setup_music21():
             us['musescoreDirectPNGPath'] = ms
     except: pass
 
-setup_music21()
+setup_music21() 
 
 # =========================================================
-# 🛠️ MuseScore 변환기 (🚨 절대 수정 금지 구역 3: shell=False)
+# MuseScore 변환기 - musicxml -> midi/png
 # =========================================================
 def convert_with_musescore(input_path: str, output_path: str) -> bool:
-    ms_path = find_musescore()
+    ms_path = find_musescore() # 경로 찾기 
     if not ms_path: return False
 
-    cmd = [ms_path, "-o", output_path, input_path]
-    try:
+    cmd = [ms_path, "-o", output_path, input_path] # 입력파일 (-o)을 출력파일로 변환
+    try: # 실제 musescore 실행
         subprocess.run(
             cmd, check=True, timeout=120, 
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False 
         )
-        if os.path.exists(output_path) and os.path.getsize(output_path) > 100:
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 100: # 파일 잘 만들어졌는지 확인 
             return True
         base, ext = os.path.splitext(output_path)
         alt = f"{base}-1{ext}"
@@ -118,7 +121,7 @@ def convert_with_musescore(input_path: str, output_path: str) -> bool:
     return False
 
 # =========================================================
-# 🖼️ 이미지 전처리 (🔥 여기가 대폭 강화되었습니다!)
+# 이미지 전처리 - 화질 개선 및 노이즈 제거
 # =========================================================
 def preprocess_image(image_bytes: bytes) -> bytes:
     try:
@@ -132,7 +135,7 @@ def preprocess_image(image_bytes: bytes) -> bytes:
             # LANCZOS 필터: 확대해도 깨짐을 최소화하는 알고리즘
             img = img.resize((target_width, new_height), Image.Resampling.LANCZOS)
         
-        # 2. 선명도(Sharpness) 2배 강화 -> 흐릿한 오선지 복구
+        # 2. 선명도(Sharpness) 2배 강화 -> 흐릿한 선을 뚜력하게 복구
         enhancer = ImageEnhance.Sharpness(img)
         img = enhancer.enhance(2.5) 
         
@@ -146,14 +149,14 @@ def preprocess_image(image_bytes: bytes) -> bytes:
         
         output = io.BytesIO()
         img.save(output, format="PNG")
-        return output.getvalue()
+        return output.getvalue() # 처리된 이미지를 다시 바이트로 반환
     except:
         return image_bytes
 
 # =========================================================
-# 🎵 [Core] 박자 및 편곡 로직
+# 박자 및 편곡 로직
 # =========================================================
-def _force_clean_durations(score):
+def _force_clean_durations(score): # 악보의 모든 음표를 돌면서 4와 12 단위로 맞춤 
     try:
         score.quantize(
             quarterLengthDivisors=(4, 12), 
@@ -184,7 +187,8 @@ def _transpose_smart(score):
     except: pass
     return score
 
-def _simplify_vertical(score_in, mode="easy"):
+def _simplify_vertical(score_in, mode="easy"): # 모드 : easy, super_easy
+    # 전조 및 잡음 제거
     score_in = _clean_omr_artifacts(score_in)
     score_in = _force_clean_durations(score_in)
     score_in = _transpose_smart(score_in)
@@ -195,7 +199,7 @@ def _simplify_vertical(score_in, mode="easy"):
     ts = score_in.flatten().getElementsByClass(music21.meter.TimeSignature).first()
     if not ts: ts = music21.meter.TimeSignature('4/4')
     
-    for i, part in enumerate(parts):
+    for i, part in enumerate(parts): # 각 파트 (오른손/왼손) 돌면서 기본 정보 복사 
         new_part = music21.stream.Part()
         new_part.insert(0, copy.deepcopy(ts))
         
@@ -208,14 +212,14 @@ def _simplify_vertical(score_in, mode="easy"):
         for el in flat_notes:
             new_element_list = [] 
             
-            # [Hard 모드: 아르페지오 로직]
+            # [Hard 모드] - 만들었으나 정확도 문제로 비활성화 상태 
             if mode == "hard":
                 if isinstance(el, music21.note.Note) or isinstance(el, music21.chord.Chord):
                     if isinstance(el, music21.chord.Chord):
                         pitches = sorted(el.pitches)
                         top_p = pitches[-1] 
                         bot_p = pitches[0]  
-                    else:
+                    else: 
                         top_p = el.pitch
                         bot_p = el.pitch
                     
@@ -251,7 +255,11 @@ def _simplify_vertical(score_in, mode="easy"):
                         chord.duration = copy.deepcopy(el.duration)
                         new_element_list = [chord]
 
+                    
+
             # [Easy / Super Easy 로직]
+            # 화음(Chord)이면? -> 가장 높은 음(Melody)만 남김.
+            # Easy 모드라면 반주음 하나 정도는 살려줌 (harmony).
             else:
                 new_element = None
                 if i == 0: 
@@ -265,10 +273,10 @@ def _simplify_vertical(score_in, mode="easy"):
                     elif isinstance(el, music21.note.Note):
                         new_element = music21.note.Note(el.pitch)
                 else:
-                    if mode == "super_easy":
+                    if mode == "super_easy": # 무조건 4분음표,  쿵 박자만 살리고 짝 박제는 삭제
                         if el.offset % 1.0 != 0: continue
                     
-                    if isinstance(el, music21.chord.Chord):
+                    if isinstance(el, music21.chord.Chord): # 화음이면 가장 낮은 음만 남김
                         bass = el.pitches[0]
                         new_element = music21.note.Note(bass)
                     elif isinstance(el, music21.note.Note):
@@ -307,10 +315,10 @@ def _simplify_vertical(score_in, mode="easy"):
         new_score.insert(0, new_part)
 
     new_score = _force_clean_durations(new_score)
-    return new_score
+    return new_score # 완성된 쉬운 악보 반환 
 
 # =========================================================
-# 🚀 메인 엔진 1: Audiveris (🚨 절대 수정 금지 구역 1: MIDI 우회)
+# 메인 엔진 1: Audiveris - 이미지 읽어서 컴퓨터가 이해하는 악보 데이터로 변환 
 # =========================================================
 def run_audiveris(image_bytes: bytes) -> str:
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -361,7 +369,7 @@ def run_audiveris(image_bytes: bytes) -> str:
                 score = music21.converter.parse(midi_path)
                 score = _force_clean_durations(score)
                 
-                # ✅ [OMR Check] 인식률 검사
+                # [OMR Check] 인식률 검사
                 total_notes = len(score.flatten().notes)
                 print(f"📊 인식된 음표 개수: {total_notes}개")
                 
@@ -379,7 +387,7 @@ def run_audiveris(image_bytes: bytes) -> str:
              raise RuntimeError("MuseScore MIDI 변환 실패")
 
 # =========================================================
-# 🚀 메인 엔진 2: 3단 변환 (🚨 절대 수정 금지 구역 2: 2중 변환)
+#  메인 엔진 2: 3단 변환 - 프론트엔드에서 호출하는 최종 관리자 함수. 재료 들어오면 각 파트에 일 분배, 최종본 포장 후 배송 
 # =========================================================
 def simplify_and_generate(music_xml_content: str) -> dict:
     setup_music21()
